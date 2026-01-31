@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "node:events";
 
-import { removeAckReactionAfterReply, shouldAckReaction } from "clawdbot/plugin-sdk";
-import type { ClawdbotConfig, PluginRuntime } from "clawdbot/plugin-sdk";
+import { removeAckReactionAfterReply, shouldAckReaction } from "openclaw/plugin-sdk";
+import type { OpenClawConfig, PluginRuntime } from "openclaw/plugin-sdk";
 import {
   handleBlueBubblesWebhookRequest,
   registerBlueBubblesWebhookTarget,
@@ -146,8 +146,14 @@ function createMockRuntime(): PluginRuntime {
         resolveRequireMention: mockResolveRequireMention as unknown as PluginRuntime["channel"]["groups"]["resolveRequireMention"],
       },
       debounce: {
-        createInboundDebouncer: vi.fn() as unknown as PluginRuntime["channel"]["debounce"]["createInboundDebouncer"],
-        resolveInboundDebounceMs: vi.fn() as unknown as PluginRuntime["channel"]["debounce"]["resolveInboundDebounceMs"],
+        // Create a pass-through debouncer that immediately calls onFlush
+        createInboundDebouncer: vi.fn((params: { onFlush: (items: unknown[]) => Promise<void> }) => ({
+          enqueue: async (item: unknown) => {
+            await params.onFlush([item]);
+          },
+          flushKey: vi.fn(),
+        })) as unknown as PluginRuntime["channel"]["debounce"]["createInboundDebouncer"],
+        resolveInboundDebounceMs: vi.fn(() => 0) as unknown as PluginRuntime["channel"]["debounce"]["resolveInboundDebounceMs"],
       },
       commands: {
         resolveCommandAuthorizedFromAuthorizers: mockResolveCommandAuthorizedFromAuthorizers as unknown as PluginRuntime["channel"]["commands"]["resolveCommandAuthorizedFromAuthorizers"],
@@ -172,7 +178,7 @@ function createMockRuntime(): PluginRuntime {
       })) as unknown as PluginRuntime["logging"]["getChildLogger"],
     },
     state: {
-      resolveStateDir: vi.fn(() => "/tmp/clawdbot") as unknown as PluginRuntime["state"]["resolveStateDir"],
+      resolveStateDir: vi.fn(() => "/tmp/openclaw") as unknown as PluginRuntime["state"]["resolveStateDir"],
     },
   };
 }
@@ -258,7 +264,7 @@ describe("BlueBubbles webhook monitor", () => {
   describe("webhook parsing + auth handling", () => {
     it("rejects non-POST requests", async () => {
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -281,7 +287,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("accepts POST requests with valid JSON payload", async () => {
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -317,7 +323,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("rejects requests with invalid JSON", async () => {
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -340,7 +346,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("authenticates via password query parameter", async () => {
       const account = createMockAccount({ password: "secret-token" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -374,7 +380,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("authenticates via x-password header", async () => {
       const account = createMockAccount({ password: "secret-token" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -412,7 +418,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("rejects unauthorized requests with wrong password", async () => {
       const account = createMockAccount({ password: "secret-token" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -445,7 +451,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("allows localhost requests without authentication", async () => {
       const account = createMockAccount({ password: "secret-token" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -491,7 +497,7 @@ describe("BlueBubbles webhook monitor", () => {
       vi.mocked(resolveChatGuidForTarget).mockClear();
 
       const account = createMockAccount({ groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -539,7 +545,7 @@ describe("BlueBubbles webhook monitor", () => {
       });
 
       const account = createMockAccount({ groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -585,7 +591,7 @@ describe("BlueBubbles webhook monitor", () => {
         dmPolicy: "allowlist",
         allowFrom: ["+15551234567"],
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -626,7 +632,7 @@ describe("BlueBubbles webhook monitor", () => {
         dmPolicy: "allowlist",
         allowFrom: ["+15559999999"], // Different number
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -667,7 +673,7 @@ describe("BlueBubbles webhook monitor", () => {
         dmPolicy: "pairing",
         allowFrom: ["+15559999999"], // Different number than sender
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -710,7 +716,7 @@ describe("BlueBubbles webhook monitor", () => {
         dmPolicy: "pairing",
         allowFrom: ["+15559999999"], // Different number than sender
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -751,7 +757,7 @@ describe("BlueBubbles webhook monitor", () => {
         dmPolicy: "open",
         allowFrom: [],
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -788,7 +794,7 @@ describe("BlueBubbles webhook monitor", () => {
       const account = createMockAccount({
         dmPolicy: "disabled",
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -827,7 +833,7 @@ describe("BlueBubbles webhook monitor", () => {
       const account = createMockAccount({
         groupPolicy: "open",
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -865,7 +871,7 @@ describe("BlueBubbles webhook monitor", () => {
       const account = createMockAccount({
         groupPolicy: "disabled",
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -904,7 +910,7 @@ describe("BlueBubbles webhook monitor", () => {
         groupPolicy: "allowlist",
         dmPolicy: "open",
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -943,7 +949,7 @@ describe("BlueBubbles webhook monitor", () => {
         groupPolicy: "allowlist",
         groupAllowFrom: ["chat_guid:iMessage;+;chat123456"],
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -984,7 +990,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockMatchesMentionPatterns.mockReturnValue(true);
 
       const account = createMockAccount({ groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1025,7 +1031,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockMatchesMentionPatterns.mockReturnValue(false);
 
       const account = createMockAccount({ groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1063,7 +1069,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockResolveRequireMention.mockReturnValue(false);
 
       const account = createMockAccount({ groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1101,7 +1107,7 @@ describe("BlueBubbles webhook monitor", () => {
   describe("group metadata", () => {
     it("includes group subject + members in ctx", async () => {
       const account = createMockAccount({ groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1144,10 +1150,140 @@ describe("BlueBubbles webhook monitor", () => {
     });
   });
 
+  describe("inbound debouncing", () => {
+    it("coalesces text-only then attachment webhook events by messageId", async () => {
+      vi.useFakeTimers();
+      try {
+        const account = createMockAccount({ dmPolicy: "open" });
+        const config: OpenClawConfig = {};
+        const core = createMockRuntime();
+
+        // Use a timing-aware debouncer test double that respects debounceMs/buildKey/shouldDebounce.
+        core.channel.debounce.createInboundDebouncer = vi.fn((params: any) => {
+          type Item = any;
+          const buckets = new Map<string, { items: Item[]; timer: ReturnType<typeof setTimeout> | null }>();
+
+          const flush = async (key: string) => {
+            const bucket = buckets.get(key);
+            if (!bucket) return;
+            if (bucket.timer) {
+              clearTimeout(bucket.timer);
+              bucket.timer = null;
+            }
+            const items = bucket.items;
+            bucket.items = [];
+            if (items.length > 0) {
+              try {
+                await params.onFlush(items);
+              } catch (err) {
+                params.onError?.(err);
+                throw err;
+              }
+            }
+          };
+
+          return {
+            enqueue: async (item: Item) => {
+              if (params.shouldDebounce && !params.shouldDebounce(item)) {
+                await params.onFlush([item]);
+                return;
+              }
+
+              const key = params.buildKey(item);
+              const existing = buckets.get(key);
+              const bucket = existing ?? { items: [], timer: null };
+              bucket.items.push(item);
+              if (bucket.timer) clearTimeout(bucket.timer);
+              bucket.timer = setTimeout(async () => {
+                await flush(key);
+              }, params.debounceMs);
+              buckets.set(key, bucket);
+            },
+            flushKey: vi.fn(async (key: string) => {
+              await flush(key);
+            }),
+          };
+        }) as unknown as PluginRuntime["channel"]["debounce"]["createInboundDebouncer"];
+
+        setBlueBubblesRuntime(core);
+
+        unregister = registerBlueBubblesWebhookTarget({
+          account,
+          config,
+          runtime: { log: vi.fn(), error: vi.fn() },
+          core,
+          path: "/bluebubbles-webhook",
+        });
+
+        const messageId = "race-msg-1";
+        const chatGuid = "iMessage;-;+15551234567";
+
+        const payloadA = {
+          type: "new-message",
+          data: {
+            text: "hello",
+            handle: { address: "+15551234567" },
+            isGroup: false,
+            isFromMe: false,
+            guid: messageId,
+            chatGuid,
+            date: Date.now(),
+          },
+        };
+
+        const payloadB = {
+          type: "new-message",
+          data: {
+            text: "hello",
+            handle: { address: "+15551234567" },
+            isGroup: false,
+            isFromMe: false,
+            guid: messageId,
+            chatGuid,
+            attachments: [
+              {
+                guid: "att-1",
+                mimeType: "image/jpeg",
+                totalBytes: 1024,
+              },
+            ],
+            date: Date.now(),
+          },
+        };
+
+        await handleBlueBubblesWebhookRequest(
+          createMockRequest("POST", "/bluebubbles-webhook", payloadA),
+          createMockResponse(),
+        );
+
+        // Simulate the real-world delay where the attachment-bearing webhook arrives shortly after.
+        await vi.advanceTimersByTimeAsync(300);
+
+        await handleBlueBubblesWebhookRequest(
+          createMockRequest("POST", "/bluebubbles-webhook", payloadB),
+          createMockResponse(),
+        );
+
+        // Not flushed yet; still within the debounce window.
+        expect(mockDispatchReplyWithBufferedBlockDispatcher).not.toHaveBeenCalled();
+
+        // After the debounce window, the combined message should be processed exactly once.
+        await vi.advanceTimersByTimeAsync(600);
+
+        expect(mockDispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(1);
+        const callArgs = mockDispatchReplyWithBufferedBlockDispatcher.mock.calls[0][0];
+        expect(callArgs.ctx.MediaPaths).toEqual(["/tmp/test-media.jpg"]);
+        expect(callArgs.ctx.Body).toContain("hello");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("reply metadata", () => {
     it("surfaces reply fields in ctx when provided", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1195,7 +1331,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("preserves part index prefixes in reply tags when short IDs are unavailable", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1240,7 +1376,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("hydrates missing reply sender/body from the recent-message cache", async () => {
       const account = createMockAccount({ dmPolicy: "open", groupPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1310,7 +1446,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("falls back to threadOriginatorGuid when reply metadata is absent", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1351,7 +1487,7 @@ describe("BlueBubbles webhook monitor", () => {
   describe("tapback text parsing", () => {
     it("does not rewrite tapback-like text without metadata", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1391,7 +1527,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("parses tapback text with custom emoji when metadata is present", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1436,7 +1572,7 @@ describe("BlueBubbles webhook monitor", () => {
       vi.mocked(sendBlueBubblesReaction).mockClear();
 
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {
+      const config: OpenClawConfig = {
         messages: {
           ackReaction: "❤️",
           ackReactionScope: "direct",
@@ -1494,7 +1630,7 @@ describe("BlueBubbles webhook monitor", () => {
         groupPolicy: "open",
         allowFrom: ["+15551234567"],
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1537,7 +1673,7 @@ describe("BlueBubbles webhook monitor", () => {
         groupPolicy: "open",
         allowFrom: [], // No one authorized
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1580,7 +1716,7 @@ describe("BlueBubbles webhook monitor", () => {
       const account = createMockAccount({
         sendReadReceipts: true,
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1621,7 +1757,7 @@ describe("BlueBubbles webhook monitor", () => {
       const account = createMockAccount({
         sendReadReceipts: false,
       });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1660,7 +1796,7 @@ describe("BlueBubbles webhook monitor", () => {
       vi.mocked(sendBlueBubblesTyping).mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1708,7 +1844,7 @@ describe("BlueBubbles webhook monitor", () => {
       vi.mocked(sendBlueBubblesTyping).mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1757,7 +1893,7 @@ describe("BlueBubbles webhook monitor", () => {
       vi.mocked(sendBlueBubblesTyping).mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1807,7 +1943,7 @@ describe("BlueBubbles webhook monitor", () => {
       });
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1853,7 +1989,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockEnqueueSystemEvent.mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1893,7 +2029,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockEnqueueSystemEvent.mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1933,7 +2069,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockEnqueueSystemEvent.mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -1970,7 +2106,7 @@ describe("BlueBubbles webhook monitor", () => {
       mockEnqueueSystemEvent.mockClear();
 
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -2011,7 +2147,7 @@ describe("BlueBubbles webhook monitor", () => {
   describe("short message ID mapping", () => {
     it("assigns sequential short IDs to messages", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -2051,7 +2187,7 @@ describe("BlueBubbles webhook monitor", () => {
 
     it("resolves short ID back to UUID", async () => {
       const account = createMockAccount({ dmPolicy: "open" });
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
@@ -2104,7 +2240,7 @@ describe("BlueBubbles webhook monitor", () => {
   describe("fromMe messages", () => {
     it("ignores messages from self (fromMe=true)", async () => {
       const account = createMockAccount();
-      const config: ClawdbotConfig = {};
+      const config: OpenClawConfig = {};
       const core = createMockRuntime();
       setBlueBubblesRuntime(core);
 
